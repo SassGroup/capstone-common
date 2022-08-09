@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+    environment {
+        //imagename = "vincentstrife/capstone-create-update"
+        //registryCredential = "dockerVincentStrifeCred"
+        // dockerImage = ''
+        //devSystemAddress="devops@192.168.1.45"
+        statusLoop=''
+    }
+    stages {
+        stage('Kubectl delete deployment capstone-all-microservices-deploy'){
+            steps{
+                script{
+                    try {
+                        sh 'kubectl delete deploy capstone-all-microservices-deploy'
+                    } catch (err) {
+                        echo "Failed due to: ${err}"
+                    }
+                }
+                sleep 20
+            }
+        }
+        stage('Kubectl apply deployment on okteto Cloud'){
+            steps{
+                dir("Deployment") {
+                    sh """sed -i 's%{create_update_image}%${env.create_update_image}%' ./capstone-all-microservices.yaml"""
+                    sh """sed -i 's%{dummy_aadhar_image}%${env.dummy_aadhar_image}%' ./capstone-all-microservices.yaml"""
+                    sh """sed -i 's%{etl_image}%${env.etl_image}%' ./capstone-all-microservices.yaml"""
+                    sh """sed -i 's%{express_backend_image}%${env.express_backend_image}%' ./capstone-all-microservices.yaml"""
+                    sh """sed -i 's%{fetch_image}%${env.fetch_image}%' ./capstone-all-microservices.yaml"""
+                    sh """sed -i 's%{internal_update_image}%${env.internal_update_image}%' ./capstone-all-microservices.yaml"""
+                    sh """sed -i 's%{dummy_pan_image}%${env.dummy_pan_image}%' ./capstone-all-microservices.yaml"""
+                    sh """sed -i 's%{swimlane_image}%${env.swimlane_image}%' ./capstone-all-microservices.yaml"""
+                    sh """kubectl apply -f ./capstone-all-microservices.yaml"""
+                }
+            } 
+        }
+        stage('Kubernetes Pods status check') {
+            steps{
+                script{
+                    statusLoop=["ViewStatus":true,"Rollback":false]
+                    while(statusLoop["ViewStatus"]){
+                        sh 'kubectl get pods -o wide'
+                        statusLoop=input(message: 'Check radio button and perform the following action', ok: 'Submit',
+                            parameters: [
+                                booleanParam(name: 'ViewStatus', defaultValue: false, description: 'Check the radio button to once again view the pods status'),
+                                booleanParam(name: 'Rollback', defaultValue: false, description: 'Check the radio button to rollback to previous deployment')
+                            ]
+                        )
+                    }
+                }
+            }
+        }
+        stage('Kube Deployment Rollback'){
+            when{
+                expression {statusLoop["Rollback"]==true}
+            }
+            steps{
+                echo "Need to check for the rollback command"
+            }
+        }
+    }
+}
